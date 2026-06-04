@@ -1,0 +1,10 @@
+# Core DSP / plotting stack (pinned to a tested, working set).
+# Use `>=x,<next-major` ranges so the repo keeps installing cleanly over time
+# while staying on the same major versions these scripts were validated against.
+numpy>=2.4,<3
+scipy>=1.17,<2
+matplotlib>=3.10,<4
+
+# Only needed for the MIT-BIH validation in exercise 2 (downloads PhysioNet
+# record 100). The script degrades gracefully if it is missing.
+wfdb>=4.3,<5

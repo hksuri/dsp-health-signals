@@ -1,0 +1,39 @@
+# ── Python ────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# ── Virtual environments ──────────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+
+# ── Tooling / caches ──────────────────────────────────────────
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# ── MIT-BIH / PhysioNet download cache ────────────────────────
+# wfdb caches downloaded records locally; don't commit clinical data dumps.
+mitdb/
+*.dat
+*.hea
+*.atr
+mit-bih*/
+
+# ── OS / editor cruft ─────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# ── Notes ─────────────────────────────────────────────────────
+# Figures in figures/ ARE committed on purpose — the README embeds them.
