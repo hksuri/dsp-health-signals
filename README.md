@@ -17,7 +17,7 @@ A compact, hands-on tour of the DSP inside every wearable health device: **filte
 | 1 | [`exercise1_bandpass.py`](exercise1_bandpass.py) | Zero-phase Butterworth band-pass that strips baseline wander and HF noise from synthetic PPG and ECG. |
 | 2 | [`exercise2_pan_tompkins.py`](exercise2_pan_tompkins.py) | Pan-Tompkins QRS detector built from scratch, validated against **MIT-BIH record 100** (Sensitivity + Positive Predictivity). |
 | 3 | [`exercise3_notch.py`](exercise3_notch.py) | IIR notch filter that removes 50/60 Hz powerline hum, verified with a before/after Welch PSD. |
-| 4 | [`exercise4_spectrogram_nlms.py`](exercise4_spectrogram_nlms.py) | Spectrogram of a rest→walk→run PPG **+ bonus** NLMS adaptive filter that removes cadence artifact using an accelerometer reference. |
+| 4 | [`exercise4_spectrogram_nlms.py`](exercise4_spectrogram_nlms.py) | Spectrogram of a rest→walk→run PPG **+ bonus** NLMS adaptive filter that removes cadence artifact using an accelerometer reference, **plus** a CWT (continuous wavelet transform) scaleogram for comparison. |
 
 Shared synthetic-signal generators and filter helpers live in [`utils.py`](utils.py) so the algorithms aren't duplicated across scripts.
 
@@ -71,6 +71,12 @@ Mains electricity radiates a narrow, persistent tone into any biopotential recor
 ![Time-domain NLMS motion rejection](figures/exercise4_timedomain.png)
 
 The spectrogram at the top is the headline result; this time-domain view shows the mechanism. During exercise the **cadence** (steps per second) drives a large motion artifact into the PPG — and crucially, cadence and heart rate occupy *overlapping*, drifting frequencies, so no fixed filter can separate them. The fix is an extra sensor: an **accelerometer** that sees the motion but not the blood flow. A **Normalized LMS (NLMS)** filter learns, sample by sample, the mapping from accelerometer to PPG motion and subtracts it; the leftover error signal is the cardiac waveform. Normalizing the step size by input power keeps it stable from a stroll to a sprint — which is why production optical heart-rate sensors rely on adaptive reference cancellation, not a smarter band-pass.
+
+#### CWT scaleogram — a scale-adaptive view
+
+![CWT scaleogram of the same three signals](figures/exercise4_scaleogram.png)
+
+The STFT spectrogram uses **one fixed window length** for every frequency, so its time-vs-frequency resolution trade-off is the same across the whole plot. A **continuous wavelet transform (CWT)** instead stretches and squeezes a mother wavelet — here a **complex Morlet** — so it uses short windows at high frequencies (sharp timing for the fast cadence harmonics) and long windows at low frequencies (fine resolution for the slow cardiac band). The scaleogram shows the same corrupted → NLMS → ground-truth signals as the spectrogram: the cardiac band steps up cleanly through rest → walk → run, the cadence energy and its harmonics are visible in the corrupted PPG and largely gone after NLMS. This figure is optional — it needs `PyWavelets`, and the script skips it gracefully if that package isn't installed.
 
 ---
 

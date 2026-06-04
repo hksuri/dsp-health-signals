@@ -8,3 +8,7 @@ matplotlib>=3.10,<4
 # Only needed for the MIT-BIH validation in exercise 2 (downloads PhysioNet
 # record 100). The script degrades gracefully if it is missing.
 wfdb>=4.3,<5
+
+# Only needed for the CWT scaleogram figure in exercise 4. The script degrades
+# gracefully (skips that figure) if it is missing.
+PyWavelets>=1.6,<2
