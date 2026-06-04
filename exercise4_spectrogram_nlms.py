@@ -1,6 +1,7 @@
 """
 Exercise 4 — Spectrogram of a rest -> walk -> run PPG, plus a bonus
-Normalized LMS (NLMS) adaptive filter for motion-artifact rejection.
+Normalized LMS (NLMS) adaptive filter for motion-artifact rejection, plus a
+continuous-wavelet-transform (CWT) scaleogram for comparison.
 
 During exercise the foot-strike cadence (steps/second) shows up in the PPG as a
 strong, drifting band that overlaps the cardiac frequency — you cannot separate
@@ -9,9 +10,17 @@ real wrist wearables is an *accelerometer reference*: an NLMS adaptive filter
 learns, sample-by-sample, the mapping from the accelerometer (pure motion) to
 the motion component in the PPG, then subtracts it, leaving the cardiac signal.
 
-Two figures are produced:
+The STFT spectrogram uses one fixed window length for every frequency, so it
+trades time resolution against frequency resolution the same way everywhere. A
+CWT scaleogram instead uses short windows at high frequencies and long windows
+at low frequencies, which tracks the drifting cadence/cardiac bands of an
+exercise transition more sharply — hence the third figure.
+
+Three figures are produced:
   * exercise4_timedomain.png  — raw PPG, accelerometer reference, NLMS output
   * exercise4_spectrogram.png — spectrograms of corrupted / cleaned / ground-truth
+  * exercise4_scaleogram.png  — CWT scaleograms of the same three signals
+                                (skipped if PyWavelets is not installed)
 
 Run:  python exercise4_spectrogram_nlms.py
 """
@@ -23,6 +32,14 @@ import numpy as np
 from scipy.signal import spectrogram
 
 from utils import synth_ppg_motion, lowpass, save_figure
+
+# PyWavelets is only needed for the CWT scaleogram figure. The script degrades
+# gracefully (skips that figure) if it is missing, mirroring how exercise 2
+# treats the optional `wfdb` dependency.
+try:
+    import pywt
+except ImportError:
+    pywt = None
 
 
 # ── Normalized LMS adaptive filter ────────────────────────────
@@ -82,6 +99,41 @@ def plot_spectrogram(ax, sig, fs, title, vmin=-40, vmax=10):
     ax.text(5, 7.4, "rest", color="white", fontsize=9, alpha=0.8)
     ax.text(25, 7.4, "walk", color="white", fontsize=9, alpha=0.8)
     ax.text(45, 7.4, "run", color="white", fontsize=9, alpha=0.8)
+    return mesh
+
+
+# ── CWT scaleogram helper ─────────────────────────────────────
+def plot_scaleogram(ax, sig, fs, t, title, wavelet="cmor1.5-1.0",
+                    fmin=0.5, fmax=8.0, n_freqs=160, vmin=-40, vmax=10):
+    """Continuous-wavelet-transform scaleogram with a complex Morlet wavelet.
+
+    Unlike the STFT spectrogram (one fixed window for all frequencies), the CWT
+    scales the analysis window with frequency, so it localises the high-frequency
+    cadence harmonics in time while still resolving the low cardiac band.
+
+    We choose the frequencies of interest (0.5-8 Hz, log-spaced) and convert them
+    to wavelet scales: f = central_freq * fs / scale  =>  scale = central_freq * fs / f.
+    """
+    freqs = np.geomspace(fmin, fmax, n_freqs)
+    scales = pywt.central_frequency(wavelet) * fs / freqs
+
+    coef, _ = pywt.cwt(sig, scales, wavelet, sampling_period=1.0 / fs)
+    power = np.abs(coef) ** 2
+    db = 10 * np.log10(power + 1e-12)
+
+    mesh = ax.pcolormesh(t, freqs, db, shading="gouraud",
+                         cmap="inferno", vmin=vmin, vmax=vmax)
+    ax.set_yscale("log")
+    ax.set_ylim(fmin, fmax)
+    ax.set_ylabel("Frequency (Hz)")
+    ax.set_title(title)
+
+    # Phase markers
+    for boundary in (20, 40):
+        ax.axvline(boundary, color="white", lw=1, ls="--", alpha=0.6)
+    ax.text(5, fmax * 0.85, "rest", color="white", fontsize=9, alpha=0.8)
+    ax.text(25, fmax * 0.85, "walk", color="white", fontsize=9, alpha=0.8)
+    ax.text(45, fmax * 0.85, "run", color="white", fontsize=9, alpha=0.8)
     return mesh
 
 
@@ -152,6 +204,38 @@ def main():
     plt.tight_layout(rect=[0, 0, 0.88, 0.95])
     path2 = save_figure(fig, "exercise4_spectrogram.png")
     print(f"Saved {path2}")
+    plt.close(fig)
+
+    # ── Figure 3: CWT scaleograms stacked ────────────────────
+    # Same three signals as the spectrogram, viewed through a continuous
+    # wavelet transform. Skipped cleanly if PyWavelets is unavailable.
+    if pywt is None:
+        print("PyWavelets not installed — skipping scaleogram figure "
+              "(`pip install PyWavelets` to enable it).")
+        return
+
+    fig, axes = plt.subplots(3, 1, figsize=(13, 10), sharex=True)
+
+    m1 = plot_scaleogram(axes[0], ppg_raw, fs, t,
+                         "Corrupted PPG — CWT resolves drifting cadence + cardiac")
+    plot_scaleogram(axes[1], ppg_nlms_filt, fs, t,
+                    "After NLMS — cadence energy suppressed, HR band survives")
+    plot_scaleogram(axes[2], ppg_clean, fs, t,
+                    "Ground truth clean cardiac")
+
+    axes[2].set_xlabel("Time (s)")
+
+    # Shared colourbar
+    fig.subplots_adjust(right=0.88)
+    cbar_ax = fig.add_axes([0.90, 0.15, 0.02, 0.7])
+    fig.colorbar(m1, cax=cbar_ax, label="Power (dB)")
+
+    plt.suptitle("Exercise 4: CWT Scaleogram — Rest → Walk → Run\n"
+                 "Complex Morlet wavelet (scale-adaptive time-frequency view)",
+                 fontweight="bold")
+    plt.tight_layout(rect=[0, 0, 0.88, 0.95])
+    path3 = save_figure(fig, "exercise4_scaleogram.png")
+    print(f"Saved {path3}")
     plt.close(fig)
 
 
