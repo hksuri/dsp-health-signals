@@ -1,13 +1,76 @@
 """
 Shared helpers for the PPG exercises.
 
-Holds the synthetic-PPG generator and the figure-saving helper, so the
-``exerciseN_*.py`` scripts can stay focused on the algorithm under study.
+Holds the synthetic-PPG generator, the PPG-DaLiA dataset loader, and the
+figure-saving helper, so the ``exerciseN_*.py`` scripts can stay focused on
+the algorithm under study.
 """
 
 import os
+import pickle
 
 import numpy as np
+
+
+# ── PPG-DaLiA dataset ─────────────────────────────────────────
+# Activity ID -> name, per the PPG-DaLiA "activity" stream (Reiss et al. 2019).
+DALIA_ACTIVITIES = {
+    0: "transient",     # between / undefined activity
+    1: "sitting",
+    2: "stairs",
+    3: "table-soccer",
+    4: "cycling",
+    5: "driving",
+    6: "lunch",
+    7: "walking",
+    8: "working",
+}
+
+# Fixed sampling rates / ground-truth windowing baked into the dataset.
+DALIA_FS_BVP = 64        # wrist BVP (PPG), Hz
+DALIA_FS_ACT = 4         # activity label stream, Hz
+DALIA_HR_WIN_S = 8.0     # ground-truth HR is computed over 8 s windows…
+DALIA_HR_SHIFT_S = 2.0   # …sliding by 2 s, so label[k] covers [2k, 2k+8] s
+
+
+def load_dalia_subject(pkl_path):
+    """Load one PPG-DaLiA subject pickle (``S{i}.pkl``).
+
+    The official release stores each subject as a pickled dict::
+
+        d['signal']['wrist']['BVP']  -> (n, 1) wrist PPG @ 64 Hz
+        d['label']                   -> (m,)   ECG-derived ground-truth HR (bpm),
+                                                one value per 2 s (8 s window)
+        d['activity']                -> (k, 1) activity IDs @ 4 Hz
+
+    Returns a dict with flat arrays: ``bvp``, ``hr_true``, ``activity``.
+    The pickles were written under Python 2, so ``encoding='latin1'`` is
+    required to unpickle them on Python 3.
+    """
+    with open(pkl_path, "rb") as f:
+        d = pickle.load(f, encoding="latin1")
+    return {
+        "bvp": np.asarray(d["signal"]["wrist"]["BVP"], dtype=float).ravel(),
+        "hr_true": np.asarray(d["label"], dtype=float).ravel(),
+        "activity": np.asarray(d["activity"]).ravel().astype(int),
+        "subject": d.get("subject", os.path.basename(pkl_path)),
+    }
+
+
+def find_dalia_subjects(data_dir):
+    """Return sorted ``S{i}.pkl`` paths under a PPG-DaLiA ``PPG_FieldStudy`` dir.
+
+    The archive unzips to ``PPG_FieldStudy/S1/S1.pkl`` … ``S15/S15.pkl``.
+    """
+    paths = []
+    if not os.path.isdir(data_dir):
+        return paths
+    for name in sorted(os.listdir(data_dir),
+                       key=lambda s: (len(s), s)):  # S1, S2, … S10 (not S1, S10, S2)
+        pkl = os.path.join(data_dir, name, f"{name}.pkl")
+        if os.path.isfile(pkl):
+            paths.append(pkl)
+    return paths
 
 
 # ── Figure output ─────────────────────────────────────────────
