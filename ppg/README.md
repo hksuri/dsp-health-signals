@@ -50,6 +50,8 @@ data and live outside the repo.
 
 ![AC/DC split and the PI gate over time](figures/exercise1_ac_dc_pi.png)
 
+*Data: synthetic — PPG with a known sensor-liftoff drop-out (8–13 s) from `synth_ppg_quality` in [`utils.py`](utils.py), so the quality gate can be checked against a known bad region.*
+
 Two zero-phase filters separate the signal: a heavy low-pass (< 0.4 Hz) recovers
 the **DC** baseline (top), and a 0.5–8 Hz band-pass recovers the **AC** pulse
 (middle). The **Perfusion Index** is the pulse size relative to the baseline,
@@ -67,6 +69,8 @@ number: when the pulse is too weak to trust, you refuse to report.
 ### 2 — HR-from-PPG on PPG-DaLiA, stratified by activity
 
 ![HR estimate vs ground truth, and MAE by activity](figures/exercise2_hr_pipeline.png)
+
+*Data: **real** — PPG-DaLiA (UCI ML Repository), all 15 subjects, wrist Empatica E4 BVP at 64 Hz; ground-truth HR derived from the chest-ECG reference. Dataset is external and not committed.*
 
 The pipeline is the standard recipe:
 
