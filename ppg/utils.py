@@ -199,3 +199,64 @@ def load_mitbih_nn(record="100", pn_dir="mitdb", nn_lo_ms=300.0, nn_hi_ms=2000.0
     rr_ms = np.diff(samp) / fs * 1000.0
     nn = rr_ms[(rr_ms >= nn_lo_ms) & (rr_ms <= nn_hi_ms)]
     return nn, fs
+
+
+# ── Two-wavelength PPG (for SpO₂, Exercise 4) ────────────────
+# Standard pulse-oximeter linear calibration: SpO2 ≈ A − B·R, where R is the
+# ratio-of-ratios. A=110, B=25 are empirical constants fit to human cohorts —
+# not physics. We invert them to *synthesize* data with a known SpO2, then let
+# Exercise 4 recover it, which validates the signal processing (the AC/DC ratio
+# is self-normalizing), NOT the calibration curve itself.
+SPO2_CAL_A = 110.0
+SPO2_CAL_B = 25.0
+
+
+def spo2_to_R(spo2):
+    """Invert the linear calibration to get the ratio-of-ratios for a target SpO2."""
+    return (SPO2_CAL_A - spo2) / SPO2_CAL_B
+
+
+def synth_ppg_red_ir(spo2_true, fs=64, dur=20.0, hr_bpm=72,
+                     dc_ir=8000.0, dc_red=6000.0, perfusion=0.02,
+                     noise_frac=0.002, seed=0):
+    """Synthetic red + IR PPG whose ratio-of-ratios encodes ``spo2_true``.
+
+    Each channel is a large **DC** light level with a small pulsatile **AC**
+    ripple on top. A pulse oximeter reads oxygen saturation from how the AC/DC
+    ratio differs between two wavelengths:
+
+        R = (AC_red / DC_red) / (AC_ir / DC_ir)
+
+    so we build the two channels to hit a chosen ``R = spo2_to_R(spo2_true)``:
+    the IR channel gets a perfusion of ``AC_ir/DC_ir = perfusion``, and the red
+    channel is scaled so its ratio is ``R × perfusion``. Because saturation
+    lives in the *ratio*, the absolute DC and AC levels are free parameters —
+    which is exactly the self-normalizing property Exercise 4 demonstrates.
+
+    Returns ``(t, red, ir)``.
+    """
+    rng = np.random.default_rng(seed)
+    N = int(fs * dur)
+    t = np.arange(N) / fs
+    rr = 60.0 / hr_bpm
+
+    # Shared cardiac pulse shape (systolic peak + dicrotic bump), same physiology
+    # in both channels — only the amplitude differs by wavelength.
+    pulse = np.zeros(N)
+    bt = 0.3
+    while bt < dur:
+        pulse += np.exp(-((t - bt) / 0.060) ** 2)
+        pulse += 0.4 * np.exp(-((t - bt - 0.18) / 0.090) ** 2)
+        bt += rr * (1 + 0.03 * rng.standard_normal())
+    # Normalize so its robust peak-to-peak (p95−p5) is 1 → AC amplitude maps
+    # directly onto the scale factors below.
+    ptp = np.percentile(pulse, 95) - np.percentile(pulse, 5)
+    pulse = (pulse - pulse.mean()) / ptp
+
+    R = spo2_to_R(spo2_true)
+    ac_ir = perfusion * dc_ir              # AC_ir / DC_ir = perfusion
+    ac_red = R * perfusion * dc_red        # AC_red / DC_red = R × perfusion
+
+    ir = dc_ir + ac_ir * pulse + noise_frac * dc_ir * rng.standard_normal(N)
+    red = dc_red + ac_red * pulse + noise_frac * dc_red * rng.standard_normal(N)
+    return t, red, ir

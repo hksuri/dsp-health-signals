@@ -3,7 +3,7 @@
 > Photoplethysmography from the signal up — splitting the pulse from the
 > baseline, gating bad windows, and turning a wrist PPG into a heart rate.
 
-Part of [**DSP for Wearable Health Signals**](../README.md). *Exercise 4 in progress.*
+Part of [**DSP for Wearable Health Signals**](../README.md).
 
 A PPG is a big, slow **DC** light level with a tiny pulsatile **AC** ripple on
 top — the extra light absorbed each heartbeat. These exercises work that signal
@@ -18,7 +18,7 @@ from first principles toward a real, scored heart-rate estimate.
 | 1 | [`exercise1_ac_dc_pi.py`](exercise1_ac_dc_pi.py) | Split PPG into AC (pulse) / DC (baseline), compute the **Perfusion Index**, and gate low-quality windows below ~0.3 % — the signal-quality check a watch runs before reporting a heart rate. *(synthetic)* |
 | 2 | [`exercise2_hr_pipeline.py`](exercise2_hr_pipeline.py) | Full **heart-rate-from-PPG** pipeline scored on **PPG-DaLiA**, with the error broken out **by activity** — exposing how motion wrecks a wrist HR estimate. *(real data)* |
 | 3 | [`exercise3_hrv.py`](exercise3_hrv.py) | **HRV** from a tachogram — time-domain (SDNN, RMSSD, pNN50) and frequency-domain (LF/HF), with the cubic-spline resample that makes a once-per-beat series FFT-able. *(synthetic + real)* |
-| 4 | _planned_ | SpO₂ via ratio-of-ratios. |
+| 4 | [`exercise4_spo2.py`](exercise4_spo2.py) | **SpO₂** via the red/IR **ratio-of-ratios** — showing the estimate tracks true saturation and is *self-normalizing*: immune to perfusion and light-level changes. *(synthetic)* |
 
 The synthetic-PPG generator, the PPG-DaLiA loader, and the figure helper live in
 [`utils.py`](utils.py).
@@ -41,6 +41,9 @@ python exercise2_hr_pipeline.py --data-dir /path/to/PPG_FieldStudy
 # Exercise 3 — synthetic part runs anywhere; the real part downloads
 # MIT-BIH record 100 from PhysioNet via `wfdb` (skips gracefully if offline).
 python exercise3_hrv.py
+
+# Exercise 4 — fully self-contained (synthetic red + IR PPG)
+python exercise4_spo2.py
 ```
 
 The ~19 GB of unpacked PPG-DaLiA pickles are **not** committed — they're external
@@ -141,6 +144,35 @@ MIT-BIH record 100 (bottom row), which comes out HF-dominated (LF/HF ≈ 0.09).
 > correction** for a clean LF/HF — here a single physiologic-range filter
 > (300–2000 ms) stands in for it, so the real LF/HF is indicative, not clinical.
 
+### 4 — SpO₂ via Ratio-of-Ratios
+
+![SpO₂ accuracy sweep and self-normalization](figures/exercise4_spo2.png)
+
+*Data: synthetic — two-wavelength (red + IR) PPG from `synth_ppg_red_ir`, built so the AC/DC ratio encodes a chosen SpO₂. (Raw dual-wavelength red/IR recordings aren't in any readily-available public dataset — PPG-DaLiA is single-channel, MIT-BIH is ECG — so this exercise is synthetic by necessity.)*
+
+A pulse oximeter uses two wavelengths — **red (~660 nm)** and **infrared
+(~940 nm)** — because oxy- and deoxy-haemoglobin absorb them differently. It
+reads the *pulsatile* (AC) signal relative to the steady (DC) light level at
+each, then takes the ratio of those ratios:
+
+```
+R = (AC_red / DC_red) / (AC_ir / DC_ir)        SpO₂ ≈ 110 − 25·R
+```
+
+The whole trick is that **R is self-normalizing**. Dividing AC by DC at each
+wavelength cancels anything that scales a channel as a whole — skin tone, sensor
+gain, contact pressure, how hard the finger presses. Only the oxygen-dependent
+ratio survives. The right-hand panel is the proof: with SpO₂ held at 97 %, the
+raw IR pulse amplitude is swept **~85×** (varying perfusion *and* brightness),
+yet the estimate stays within **±0.8 %**. The middle panel confirms the estimate
+tracks true saturation across 80–100 % (MAE 0.40 %).
+
+> Honesty note: the synthetic signals are generated with the *same* 110/25
+> calibration the estimator inverts, so this validates the **DSP** — that the
+> ratio is robust — **not** the calibration curve. Those constants are empirical
+> (fit to human cohorts), not physics; a real device needs clinical calibration
+> against a CO-oximeter. That's the point worth defending in a writeup.
+
 ---
 
 ## Notes
@@ -148,7 +180,9 @@ MIT-BIH record 100 (bottom row), which comes out HF-dominated (LF/HF ≈ 0.09).
 - **Data sources** are labelled under each figure. **Exercise 1** uses a
   synthetic PPG (known perfusion drop-out); **Exercise 2** uses real PPG-DaLiA
   only; **Exercise 3** validates on a synthetic tachogram with known LF/HF, then
-  runs on real MIT-BIH NN intervals.
+  runs on real MIT-BIH NN intervals; **Exercise 4** is synthetic two-wavelength
+  PPG (no public raw red/IR dataset), used to demonstrate the self-normalizing
+  ratio rather than to validate the empirical calibration constants.
 - The 12.4 bpm overall MAE is a deliberately **naive** baseline — published
   PPG-DaLiA results reach ~7–8 bpm with frequency-domain tracking and motion
   compensation. The goal here is to expose the motion problem honestly, not to
