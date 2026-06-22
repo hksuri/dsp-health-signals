@@ -5,8 +5,9 @@ numpy>=2.4,<3
 scipy>=1.17,<2
 matplotlib>=3.10,<4
 
-# Only needed for the MIT-BIH validation in exercise 2 (downloads PhysioNet
-# record 100). The script degrades gracefully if it is missing.
+# Needed for the MIT-BIH validation that downloads PhysioNet record 100
+# (filters-and-detection/exercise2 and ppg/exercise3). Both scripts degrade
+# gracefully if it is missing.
 wfdb>=4.3,<5
 
 # Only needed for the CWT scaleogram figure in exercise 4. The script degrades

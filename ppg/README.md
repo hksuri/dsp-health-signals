@@ -3,7 +3,7 @@
 > Photoplethysmography from the signal up — splitting the pulse from the
 > baseline, gating bad windows, and turning a wrist PPG into a heart rate.
 
-Part of [**DSP for Wearable Health Signals**](../README.md). *Exercises 3–4 in progress.*
+Part of [**DSP for Wearable Health Signals**](../README.md). *Exercise 4 in progress.*
 
 A PPG is a big, slow **DC** light level with a tiny pulsatile **AC** ripple on
 top — the extra light absorbed each heartbeat. These exercises work that signal
@@ -17,7 +17,7 @@ from first principles toward a real, scored heart-rate estimate.
 |---|--------|--------------|
 | 1 | [`exercise1_ac_dc_pi.py`](exercise1_ac_dc_pi.py) | Split PPG into AC (pulse) / DC (baseline), compute the **Perfusion Index**, and gate low-quality windows below ~0.3 % — the signal-quality check a watch runs before reporting a heart rate. *(synthetic)* |
 | 2 | [`exercise2_hr_pipeline.py`](exercise2_hr_pipeline.py) | Full **heart-rate-from-PPG** pipeline scored on **PPG-DaLiA**, with the error broken out **by activity** — exposing how motion wrecks a wrist HR estimate. *(real data)* |
-| 3 | _planned_ | HRV features from a tachogram. |
+| 3 | [`exercise3_hrv.py`](exercise3_hrv.py) | **HRV** from a tachogram — time-domain (SDNN, RMSSD, pNN50) and frequency-domain (LF/HF), with the cubic-spline resample that makes a once-per-beat series FFT-able. *(synthetic + real)* |
 | 4 | _planned_ | SpO₂ via ratio-of-ratios. |
 
 The synthetic-PPG generator, the PPG-DaLiA loader, and the figure helper live in
@@ -37,10 +37,15 @@ python exercise1_ac_dc_pi.py
 # Download, unzip, and point the script at the PPG_FieldStudy folder:
 python exercise2_hr_pipeline.py --data-dir /path/to/PPG_FieldStudy
 # or one subject:  --subject S3      (or set $PPG_DALIA_DIR)
+
+# Exercise 3 — synthetic part runs anywhere; the real part downloads
+# MIT-BIH record 100 from PhysioNet via `wfdb` (skips gracefully if offline).
+python exercise3_hrv.py
 ```
 
 The ~19 GB of unpacked PPG-DaLiA pickles are **not** committed — they're external
-data and live outside the repo.
+data and live outside the repo. Exercise 3 needs `wfdb`; this machine has it in
+the `ct-view` conda env (see [`CLAUDE.md`](../CLAUDE.md)).
 
 ---
 
@@ -108,12 +113,42 @@ footsteps instead of heartbeats. No peak-picking trick separates them — that
 takes an accelerometer reference and adaptive cancellation, which is exactly the
 next project.
 
+### 3 — HRV Features from a Tachogram
+
+![Synthetic and MIT-BIH tachograms with their LF/HF spectra](figures/exercise3_hrv.png)
+
+*Data: **synthetic + real**. Top row — a synthetic tachogram (`synth_tachogram`) with LF and HF oscillations injected at **known** frequencies/amplitudes, so the spectral readout can be checked against the truth. Bottom row — **real** NN intervals from MIT-BIH record 100 (PhysioNet, via `wfdb`).*
+
+Heart-rate *variability* is the structure in the beat-to-beat intervals (the
+**tachogram**), not the average rate. Two families of features:
+
+```
+time domain   SDNN  = std(NN)                  RMSSD = √mean(ΔNN²)   pNN50 = %|ΔNN|>50ms
+freq domain   LF = ∫PSD over 0.04–0.15 Hz      HF = ∫PSD over 0.15–0.40 Hz      LF/HF
+```
+
+The frequency-domain half exists to teach **one** thing: a tachogram is sampled
+once per beat, so its time axis is *uneven* — an FFT is meaningless on it. You
+must first **cubic-spline resample** the intervals onto a uniform grid (4 Hz
+here), then take a Welch PSD. The synthetic panel is the proof it works: LF and
+HF were injected at exactly **0.10 Hz** and **0.25 Hz**, and the recovered
+spectrum (top-right) peaks right on those green markers, with LF/HF = 2.73 —
+matching the injected amplitude ratio (40 ms vs 25 ms → (40/25)² ≈ 2.56). Only
+once the math is validated on a known answer do we trust it on the **real**
+MIT-BIH record 100 (bottom row), which comes out HF-dominated (LF/HF ≈ 0.09).
+
+> Caveat shown honestly: NN intervals from real ECG need beat-by-beat **ectopic
+> correction** for a clean LF/HF — here a single physiologic-range filter
+> (300–2000 ms) stands in for it, so the real LF/HF is indicative, not clinical.
+
 ---
 
 ## Notes
 
-- **Exercise 1** uses a synthetic PPG so the perfusion drop-out has known timing;
-  **Exercise 2** uses the real PPG-DaLiA dataset only (no synthetic fallback).
+- **Data sources** are labelled under each figure. **Exercise 1** uses a
+  synthetic PPG (known perfusion drop-out); **Exercise 2** uses real PPG-DaLiA
+  only; **Exercise 3** validates on a synthetic tachogram with known LF/HF, then
+  runs on real MIT-BIH NN intervals.
 - The 12.4 bpm overall MAE is a deliberately **naive** baseline — published
   PPG-DaLiA results reach ~7–8 bpm with frequency-domain tracking and motion
   compensation. The goal here is to expose the motion problem honestly, not to

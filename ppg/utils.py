@@ -137,3 +137,65 @@ def synth_ppg_quality(fs=64, dur=24.0, hr_bpm=72, seed=0):
 
     ppg = dc_baseline + amplitude * pulse + noise
     return t, ppg
+
+
+# ── Tachogram sources (for HRV, Exercise 3) ──────────────────
+# Standard HRV frequency bands (Task Force 1996), in Hz.
+HRV_LF_BAND = (0.04, 0.15)   # low frequency — baroreflex / sympathetic+vagal
+HRV_HF_BAND = (0.15, 0.40)   # high frequency — respiratory (vagal) modulation
+
+
+def synth_tachogram(dur_s=300.0, mean_hr_bpm=60, lf_hz=0.10, hf_hz=0.25,
+                    lf_ms=40.0, hf_ms=25.0, jitter_ms=5.0, seed=0):
+    """Synthetic NN-interval series (a *tachogram*) with KNOWN LF/HF content.
+
+    A tachogram is the sequence of beat-to-beat intervals (here in ms). Real
+    HRV rides two oscillations on top of the mean interval: a slow **LF** wave
+    (~0.1 Hz, baroreflex) and a faster **HF** wave (~0.25 Hz, respiratory sinus
+    arrhythmia). We inject both at known frequencies and amplitudes so the
+    frequency-domain HRV computation can be checked against a ground-truth
+    answer — something a real recording can never give you.
+
+    Each interval is evaluated at its own beat time (intervals are sampled
+    once per beat, on an *uneven* time grid — the whole point of Exercise 3).
+
+    Returns ``(nn_ms, meta)`` where ``meta`` records the injected parameters.
+    """
+    rng = np.random.default_rng(seed)
+    mean_nn = 60000.0 / mean_hr_bpm        # ms between beats
+    nn = []
+    t = 0.0                                # beat time, seconds
+    while t < dur_s:
+        modulation = (lf_ms * np.sin(2 * np.pi * lf_hz * t)
+                      + hf_ms * np.sin(2 * np.pi * hf_hz * t))
+        interval = mean_nn + modulation + jitter_ms * rng.standard_normal()
+        nn.append(interval)
+        t += interval / 1000.0             # advance by the interval we just drew
+    meta = dict(lf_hz=lf_hz, hf_hz=hf_hz, lf_ms=lf_ms, hf_ms=hf_ms,
+                mean_hr_bpm=mean_hr_bpm)
+    return np.asarray(nn), meta
+
+
+# Beat annotation symbols counted as heartbeats (same set as the Pan-Tompkins
+# exercise): N,L,R,… are the AAMI beat classes in the MIT-BIH annotations.
+_MITBIH_BEAT_LABELS = set("NLRBAaJSVrFejnE/fQ")
+
+
+def load_mitbih_nn(record="100", pn_dir="mitdb", nn_lo_ms=300.0, nn_hi_ms=2000.0):
+    """Real NN intervals from a PhysioNet MIT-BIH record's beat annotations.
+
+    Reads the cardiologist ``.atr`` annotations, keeps the beat symbols, turns
+    successive R-peak sample indices into intervals (ms), and drops anything
+    outside a physiologic ``[nn_lo_ms, nn_hi_ms]`` window — a crude ectopic /
+    artifact filter so a single missed or extra beat can't dominate HRV.
+
+    Requires the ``wfdb`` package and PhysioNet access. Returns ``(nn_ms, fs)``.
+    """
+    import wfdb
+    ann = wfdb.rdann(record, "atr", pn_dir=pn_dir)
+    fs = ann.fs
+    samp = np.array([s for s, c in zip(ann.sample, ann.symbol)
+                     if c in _MITBIH_BEAT_LABELS], dtype=float)
+    rr_ms = np.diff(samp) / fs * 1000.0
+    nn = rr_ms[(rr_ms >= nn_lo_ms) & (rr_ms <= nn_hi_ms)]
+    return nn, fs
