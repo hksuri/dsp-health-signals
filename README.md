@@ -10,6 +10,7 @@ A hands-on portfolio of the DSP inside every wearable health device, built from 
 |--------|---------------|
 | [`filters-and-detection/`](filters-and-detection/) | Classic DSP on raw ECG/PPG — Butterworth band-pass, Pan-Tompkins QRS detection (scored on MIT-BIH), 50/60 Hz notch, and a spectrogram + NLMS adaptive motion-rejection study with a CWT scaleogram. |
 | [`ppg/`](ppg/) | PPG physiology and pulse analysis — AC/DC perfusion index, heart-rate extraction (scored on PPG-DaLiA), HRV from a tachogram, and SpO₂ via ratio-of-ratios. |
+| [`project1-afib-detection/`](project1-afib-detection/) | Atrial-fibrillation detection on the MIT-BIH AFib Database — data exploration: AFib burden across records, ECG morphology, and the RR-irregularity (Poincaré) signature. *(in progress)* |
 
 Each folder has its own README with the full walkthrough and figures.
 
