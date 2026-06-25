@@ -19,6 +19,29 @@ import numpy as np
 import wfdb
 
 DB = "afdb"
+AFDB_DB = DB                       # PhysioNet slug, used for remote fallback
+
+# ── Where downloaded data lives (git-ignored; see download_data.py) ──
+HERE = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(HERE, "data")
+AFDB_DIR = os.path.join(DATA_DIR, "afdb")
+C2017_DIR = os.path.join(DATA_DIR, "challenge2017")
+
+
+def _afdb(rec, ext="hea"):
+    """Resolve an afdb record to a (name, kwargs) pair for wfdb.
+
+    Prefer the local download in ``data/afdb`` so scripts run offline and fast;
+    fall back to streaming from PhysioNet (``pn_dir=``) if the specific file
+    isn't there yet. We check the exact ``ext`` the caller is about to read
+    (``hea``/``dat``/``atr``/``qrs``) so a half-finished download — a header
+    present but its annotations not yet — falls back to remote instead of
+    erroring. Every wfdb reader below funnels through this.
+    """
+    local = os.path.join(AFDB_DIR, rec)
+    if os.path.exists(f"{local}.{ext}"):
+        return local, {}
+    return rec, {"pn_dir": DB}
 
 # Rhythm aux-note -> readable name (the four rhythms annotated in afdb).
 RHYTHM_NAMES = {
@@ -46,18 +69,27 @@ def save_figure(fig, filename, dpi=150):
 
 # ── Loaders ───────────────────────────────────────────────────
 def list_records():
-    """All 25 afdb record names, e.g. '04015'."""
+    """All 25 afdb record names, e.g. '04015'.
+
+    Reads the local ``RECORDS`` manifest if the data is downloaded, else asks
+    PhysioNet.
+    """
+    manifest = os.path.join(AFDB_DIR, "RECORDS")
+    if os.path.exists(manifest):
+        return [ln.strip() for ln in open(manifest) if ln.strip()]
     return wfdb.get_record_list(DB)
 
 
 def has_signal(rec):
     """False for the two annotation-only records (00735, 03665)."""
-    return wfdb.rdheader(rec, pn_dir=DB).sig_len > 0
+    name, kw = _afdb(rec)
+    return wfdb.rdheader(name, **kw).sig_len > 0
 
 
 def record_length(rec):
     """Record length in samples (falls back to the last beat if no signal)."""
-    hdr = wfdb.rdheader(rec, pn_dir=DB)
+    name, kw = _afdb(rec)
+    hdr = wfdb.rdheader(name, **kw)
     if hdr.sig_len > 0:
         return hdr.sig_len
     beats, _ = load_beats(rec)
@@ -66,17 +98,19 @@ def record_length(rec):
 
 def load_beats(rec):
     """QRS beat sample indices and fs, from the ``.qrs`` annotations."""
-    ann = wfdb.rdann(rec, "qrs", pn_dir=DB)
+    name, kw = _afdb(rec, "qrs")
+    ann = wfdb.rdann(name, "qrs", **kw)
     return np.asarray(ann.sample), ann.fs
 
 
 def load_signal(rec, sampfrom, sampto, channel=0):
-    """One ECG channel over [sampfrom, sampto) — a partial remote read.
+    """One ECG channel over [sampfrom, sampto) — read straight from disk.
 
     Returns ``(signal, fs, channel_name)``.
     """
-    r = wfdb.rdrecord(rec, pn_dir=DB, sampfrom=sampfrom, sampto=sampto,
-                      channels=[channel])
+    name, kw = _afdb(rec, "dat")
+    r = wfdb.rdrecord(name, sampfrom=sampfrom, sampto=sampto,
+                      channels=[channel], **kw)
     return r.p_signal[:, 0], r.fs, r.sig_name[0]
 
 
@@ -87,7 +121,8 @@ def rhythm_spans(rec):
     Each ``.atr`` annotation gives a start; the episode runs to the next start
     (or the record end for the last one). Returns ``(spans, fs)``.
     """
-    ann = wfdb.rdann(rec, "atr", pn_dir=DB)
+    name, kw = _afdb(rec, "atr")
+    ann = wfdb.rdann(name, "atr", **kw)
     starts = [int(s) for s in ann.sample]
     names = [RHYTHM_NAMES.get(a.strip().strip("\x00"), a.strip())
              for a in ann.aux_note]
@@ -135,3 +170,66 @@ def find_episode(spans, name, min_seconds, fs):
         if nm == name and (e - s) >= need:
             return s, e
     return None
+
+
+# ── Windowing: from expert episodes → fixed-length labelled windows ──
+# The dataset labels rhythm as variable-length *episodes* (see rhythm_spans).
+# A classifier, though, wants fixed-length *windows*. This is the bridge:
+# tile the record into ``win_s``-second windows and give each a single label
+# derived from whatever episode(s) it overlaps.
+WINDOW_DTYPE = [("start", "i8"), ("end", "i8"), ("label", "U16"),
+                ("afib_frac", "f4"), ("pure", "?")]
+
+
+def window_labels(rec, win_s=30.0, hop_s=None, rule="majority"):
+    """Tile a record into fixed windows, each carrying one rhythm label.
+
+    Returns ``(windows, fs)`` where ``windows`` is a structured array with:
+      start, end   — window bounds in samples
+      label        — the propagated rhythm (see ``rule``)
+      afib_frac    — fraction of the window's labelled time that is AFib
+      pure         — True if the window sits inside a single episode
+
+    ``rule`` decides how to collapse a window that straddles >1 episode:
+      "majority"     — the rhythm covering the most of the window (default)
+      "afib_if_any"  — AFib if *any* part is AFib (high-sensitivity labelling)
+      "pure"         — keep the rhythm only if the window is 100% one episode,
+                       otherwise label it "Mixed" (drop these to train clean)
+
+    Windows are non-overlapping by default (``hop_s = win_s``).
+    """
+    spans, fs = rhythm_spans(rec)
+    if not spans:
+        return np.array([], dtype=WINDOW_DTYPE), fs
+
+    win = int(win_s * fs)
+    hop = int((hop_s or win_s) * fs)
+    rec_start, rec_end = spans[0][0], spans[-1][1]
+
+    rows = []
+    w = rec_start
+    while w + win <= rec_end:
+        we = w + win
+        cover = {}                                   # rhythm name → samples
+        for s, e, nm in spans:
+            overlap = min(e, we) - max(s, w)
+            if overlap > 0:
+                cover[nm] = cover.get(nm, 0) + overlap
+        total = sum(cover.values())
+        afib_frac = cover.get("AFib", 0) / total if total else 0.0
+        majority = max(cover, key=cover.get)
+        pure = len(cover) == 1
+
+        if rule == "majority":
+            label = majority
+        elif rule == "afib_if_any":
+            label = "AFib" if afib_frac > 0 else majority
+        elif rule == "pure":
+            label = majority if pure else "Mixed"
+        else:
+            raise ValueError(f"unknown rule {rule!r}")
+
+        rows.append((w, we, label, afib_frac, pure))
+        w += hop
+
+    return np.array(rows, dtype=WINDOW_DTYPE), fs

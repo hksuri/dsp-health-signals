@@ -35,5 +35,11 @@ Thumbs.db
 .vscode/
 .idea/
 
+# ── Project 1 (AFib) downloaded datasets + follow-along figures ─
+# Raw PhysioNet dumps (afdb signals, Challenge-2017 training set) and the
+# scratch figures used only to *follow along* — neither belongs in the repo.
+project1-afib-detection/data/
+project1-afib-detection/figures/followalong/
+
 # ── Notes ─────────────────────────────────────────────────────
 # Figures in figures/ ARE committed on purpose — the README embeds them.
