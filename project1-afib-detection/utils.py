@@ -43,7 +43,9 @@ def _afdb(rec, ext="hea"):
         return local, {}
     return rec, {"pn_dir": DB}
 
-# Rhythm aux-note -> readable name (the four rhythms annotated in afdb).
+# Rhythm aux-note -> readable name. afdb tiles every instant with one of these
+# four. Note: "(N" is afdb's catch-all for *all other rhythms*, not strictly
+# normal sinus — so "Normal" here means "not AFib/AFlutter/AV-junctional".
 RHYTHM_NAMES = {
     "(N": "Normal",
     "(AFIB": "AFib",

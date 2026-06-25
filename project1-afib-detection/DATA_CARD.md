@@ -58,6 +58,6 @@ Short single-lead strips (~9–60 s, 300 Hz), one label each. 8,528 labelled rec
 2. **Severe class imbalance, two ways** — AFib is ~37% of afdb time but concentrated in a few subjects; windowing inherits this.
 3. **Machine-detected beats** (`.qrs`) — RR-based features carry detector error, not just physiology.
 4. **Boundary windows are ambiguous** — a 30 s window spanning an onset is part-Normal/part-AFib; its label is a *rule*, not ground truth (see `window_labels.py`).
-5. **Only 4 rhythms are labelled** in afdb (Normal, AFib, AFlutter, AV-junctional); everything else falls into the dominant span.
+5. **'Normal' is a catch-all** — afdb tiles every instant with one of 4 labels (AFib, AFlutter, AV-junctional, and `(N`), but `(N` means *all other rhythms*, not strictly normal sinus. Our 'Normal' class is really 'not one of the three flagged arrhythmias'.
 6. **Two datasets, two label schemes** — afdb has per-sample rhythm spans; Challenge-2017 has one verdict per strip incl. a *Noisy* class afdb has no equivalent for.
 7. **Domain shift** — afdb is clean Holter ECG; Challenge-2017 is short, single-lead, and noisier. Good afdb numbers ≠ wrist-ready.
