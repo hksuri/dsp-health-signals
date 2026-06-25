@@ -1,9 +1,10 @@
 """
 Step 2 — turn expert rhythm *episodes* into fixed-length labelled *windows*.
 
-This is the heart of the Week-3 goal "window the signal (e.g. 30 s) and
-propagate labels per window." It's worth understanding exactly what happens,
-because it's where the dataset's shape changes:
+A detector trains on fixed-length windows, but afdb labels rhythm as
+variable-length episodes — so somewhere we have to window the signal and
+propagate a label to each window. It's worth understanding exactly what
+happens here, because it's where the dataset's shape changes:
 
   BEFORE (how afdb stores truth):  variable-length episodes
       |————— Normal —————|—— AFib ——|———— Normal ————|     (minutes to hours)
@@ -23,7 +24,7 @@ What it does:
      plus a zoom on a transition so the boundary windows are obvious.
   3. Compares the three labelling rules (how many windows they disagree on).
   4. Builds the windowed dataset across ALL records → data/windows_30s.csv,
-     and reports the per-window class balance (the number Week 4 trains on).
+     and reports the per-window class balance (what a classifier trains on).
 
 Run:  python window_labels.py                 # default record 08219
       python window_labels.py --record 04048
@@ -144,7 +145,7 @@ def compare_rules(rec, win_s):
 
 
 def build_dataset(records, win_s, rule="majority"):
-    """Window every record and write one flat CSV — the Week-4 training table."""
+    """Window every record and write one flat CSV — the model training table."""
     out = os.path.join(DATA_DIR, f"windows_{int(win_s)}s.csv")
     counts = {}
     total = 0

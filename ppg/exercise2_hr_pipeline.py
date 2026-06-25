@@ -51,7 +51,7 @@ def hr_from_ppg(ppg, fs):
 
     Returns ``(peaks, hr_smooth)`` where ``peaks`` are sample indices of the
     detected pulses and ``hr_smooth`` is the per-beat HR after outlier removal
-    and a short moving average. Faithful to the Week 3 tutorial recipe.
+    and a short moving average.
     """
     # 1. Band-pass to isolate the AC cardiac component (0.5-4 Hz ≈ 30-240 bpm).
     sos = butter(4, [0.5 / (fs / 2), 4 / (fs / 2)], btype="band", output="sos")

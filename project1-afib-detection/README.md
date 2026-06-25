@@ -47,8 +47,8 @@ python overview.py                      # scans all 25 records' rhythm labels
 python explore_record.py --record 06995 # one record → strips + Poincaré + tachogram
 ```
 
-Swap in any record to explore it yourself — a mostly-normal one (`04015`, the
-tutorial's record, 0.6 % AFib) shows an almost pure cluster; a high-burden one
+Swap in any record to explore it yourself — a mostly-normal one (`04015`,
+0.6 % AFib) shows an almost pure cluster; a high-burden one
 (`07162`, 100 %) is nearly all cloud:
 
 ```bash

@@ -30,7 +30,7 @@
 - Median across records: **21.5%**
 - AFib is *paroxysmal* — it starts and stops within a record, so a detector must work **within** a recording, not just label whole subjects.
 
-### Derived: 30 s windows (the Week-4 training table)
+### Derived: 30 s windows (the model training table)
 
 Built by `window_labels.py` → `data/windows_30s.csv` (30,501 windows, majority label).
 

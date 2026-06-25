@@ -3,9 +3,9 @@ Step 4 — write the DATA CARD.
 
 A data card is the one-page "know your dataset cold" summary: how many subjects,
 how the classes balance, where the labels came from, and — most importantly —
-the limitations that will bite you later if you forget them. The Week-3 brief
-calls this "the spine of the Project 1 writeup," so unlike the follow-along
-figures, the output here (DATA_CARD.md) IS committed.
+the limitations that will bite you later if you forget them. It's the spine of
+the Project 1 writeup, so unlike the follow-along figures, the output here
+(DATA_CARD.md) IS committed.
 
 This script computes every number from the data on disk (nothing hard-coded) and
 renders DATA_CARD.md, so the card can never drift from the dataset.
@@ -122,7 +122,7 @@ def render():
     win = window_stats()
     if win:
         counts, total = win
-        add("### Derived: 30 s windows (the Week-4 training table)\n")
+        add("### Derived: 30 s windows (the model training table)\n")
         add(f"Built by `window_labels.py` → `data/windows_30s.csv` "
             f"({total:,} windows, majority label).\n")
         add("| Label | Windows | Share |")
